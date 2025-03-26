@@ -137,18 +137,18 @@ class FFNN:
                 return exp_z / np.sum(exp_z, axis=0, keepdims=True)
             case _:
                 raise ValueError(f"Unsupported activation function: {activation_function}")
-    
+
     def _activate_derivative(self, z, activation_function):
         """
         Compute the derivative of the activation function.
-        
+
         Parameters:
         -----------
         z : numpy.ndarray
             Pre-activation values
         activation_function : str
             Name of the activation function
-            
+
         Returns:
         --------
         numpy.ndarray
@@ -163,10 +163,16 @@ class FFNN:
                 activated_values = self._activate(z, 'sigmoid')
                 return activated_values * (1 - activated_values)
             case 'tanh':
-                return 1 - np.tanh(z)**2
+                return 1 - np.tanh(z) ** 2
             case 'softmax':
                 activated_values = self._activate(z, 'softmax')
-                return activated_values
+                batch_size, num_classes = activated_values.shape
+                j_c = np.zeros((batch_size, num_classes, num_classes))
+
+                for i in range(batch_size):
+                    s = activated_values[i].reshape(-1, 1)
+                    j_c[i] = np.diagflat(s) - np.dot(s, s.T)
+                return j_c
             case _:
                 raise ValueError(f"Unsupported activation function: {activation_function}")
     
