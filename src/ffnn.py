@@ -166,13 +166,21 @@ class FFNN:
                 return 1 - np.tanh(z) ** 2
             case 'softmax':
                 activated_values = self._activate(z, 'softmax')
-                batch_size, num_classes = activated_values.shape
-                j_c = np.zeros((batch_size, num_classes, num_classes))
+                num_classes, batch_size = activated_values.shape
+                jacobians = []
 
                 for i in range(batch_size):
-                    s = activated_values[i].reshape(-1, 1)
-                    j_c[i] = np.diagflat(s) - np.dot(s, s.T)
-                return j_c
+                    s = activated_values[:, i].reshape(-1, 1)
+                    
+                    jacobian = np.zeros((num_classes, num_classes))
+                    for i in range(num_classes):
+                        for j in range(num_classes):
+                            if i == j:
+                                jacobian[i, j] = s[i, 0] * (1 - s[i, 0])
+                            else:
+                                jacobian[i, j] = -s[i, 0] * s[j, 0]
+                    jacobians.append(jacobian)
+                return jacobians
             case _:
                 raise ValueError(f"Unsupported activation function: {activation_function}")
     
@@ -296,8 +304,20 @@ class FFNN:
         delta = self._compute_loss_derivative(y, y_pred)
         
         # Handle the special case for softmax + categorical cross-entropy
-        if self.activation_functions[-1] == 'softmax' and self.loss_function == 'categorical_crossentropy':
-            pass
+        if self.activation_functions[-1] == 'softmax':
+            if self.loss_function == 'categorical_crossentropy':
+                pass
+            else:
+                jacobians = self._activate_derivative(
+                    self.z_values[-1],
+                    self.activation_functions[-1]
+                )
+                new_delta = np.zeros_like(delta)
+                
+                for k in range(n_samples):
+                    new_delta[:, k] = np.dot(jacobians[k], delta[:, k].reshape(-1, 1)).flatten()
+                
+                delta = new_delta
         else:
             # For other combinations, multiply by the activation derivative
             delta = delta * self._activate_derivative(self.z_values[-1], 
